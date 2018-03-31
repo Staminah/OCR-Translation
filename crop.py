@@ -7,7 +7,7 @@ For details on the methodology, see
 http://www.danvk.org/2015/01/07/finding-blocks-of-text-in-an-image-using-python-opencv-and-numpy.html
 Script created by Dan Vanderkam (https://github.com/danvk)
 Adapted to Python 3 by Lui Pillmann (https://github.com/luipillmann)
-Adapted to work with photographs by Fleury Anthony and Schnaebele Marc, HE-Arc(https://github.com/Staminah/OCR-Translation.git)
+Adapted to work with photographs by Fleury Anthony and Schnaebele Marc, HE-Arc (https://github.com/Staminah/OCR-Translation.git)
 '''
 
 import glob
@@ -70,6 +70,7 @@ def union_crops(crop1, crop2):
 
 
 def intersect_crops(crop1, crop2):
+    """Intersection between two (x1, y1, x2, y2) rects"""
     x11, y11, x21, y21 = crop1
     x12, y12, x22, y22 = crop2
     return max(x11, x12), max(y11, y12), min(x21, x22), min(y21, y22)
@@ -237,8 +238,9 @@ def pad_crop(crop, contours, edges, border_contour, pad_px=15):
 
     # If a sheet (main border) has been found
     if border_contour is not None and len(border_contour) > 0:
+        # Get infos about border contour
         c = props_for_contours([border_contour], edges)[0]
-        # Padding
+        # Calc Sheet position +  small padding
         bx1, by1, bx2, by2 = c['x1'] + 5, c['y1'] + 5, c['x2'] - 5, c['y2'] - 5
 
     def crop_in_border(crop):
@@ -249,20 +251,29 @@ def pad_crop(crop, contours, edges, border_contour, pad_px=15):
         y2 = min(y2 + pad_px, by2)
         return crop
 
+    # Chose the more inside sheet coordinates for each of the 4 crop rect points
     crop = crop_in_border(crop)
-
+    # Get infos about contours
     c_info = props_for_contours(contours, edges)
     changed = False
+    # For each contour
     for c in c_info:
         this_crop = c['x1'], c['y1'], c['x2'], c['y2']
+        # Area of current contour
         this_area = crop_area(this_crop)
+        # Area of intersection between this contour and given cropping rect
         int_area = crop_area(intersect_crops(crop, this_crop))
+        # Creates new cropping rect by unioning the current contour and last saved cropping rect
         new_crop = crop_in_border(union_crops(crop, this_crop))
-        if 0 < int_area < this_area and crop != new_crop:
+
+        # If not full area contour is contained inside the save cropping rect
+        # Then the new area calculated bewteen the current contour and the last saved cropping rect become the new the saved cropping rect
+        if (0 < int_area < this_area) and crop != new_crop:
             print('%s -> %s' % (str(crop), str(new_crop)))
             changed = True
             crop = new_crop
 
+    # If there has been any change to the saved cropping rect, it needs to verified again.
     if changed:
         return pad_crop(crop, contours, edges, border_contour, pad_px)
     else:
