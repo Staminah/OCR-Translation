@@ -121,9 +121,6 @@ def remove_border(contour, ary, im):
     # Create a new full black image with same dimensions as given image, this image will be used as mask
     c_im = np.zeros(ary.shape)
 
-    # NOTE : Debug
-    cv2.imwrite("imgcrop/rm_border_cim.png", c_im)
-
     r = cv2.minAreaRect(contour)
     degs = r[2]
     print("degree ", degs)
@@ -136,9 +133,7 @@ def remove_border(contour, ary, im):
     cv2.drawContours(c_im, [contour], 0, 0, 4)
 
     # NOTE : Debug
-    remove_border_mask = im
-    cv2.drawContours(remove_border_mask, [contour], -1, (0,0,255), 3)
-    cv2.imwrite("imgcrop/remove_border_mask.png", remove_border_mask)
+    cv2.imwrite("imgcrop/05_remove_border_mask.png", c_im)
 
     # Return a new image in which each pixel is the minimum between the mask and given image (keeps everything inside the white part of the mask)
     return np.minimum(c_im, ary), degs
@@ -164,9 +159,6 @@ def find_components(edges, max_components=16):
         _, contours, hierarchy = cv2.findContours(dilated_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         # Updates count
         count = len(contours)
-
-    # NOTE : Debug
-    cv2.imwrite("imgcrop/dilated.png", dilated_image)
 
     # Return the final contours
     return contours
@@ -220,10 +212,11 @@ def find_optimal_components_subset(contours, edges):
             remaining_frac = c['sum'] / (total - covered_sum)
             new_area_frac = 1.0 * crop_area(new_crop) / crop_area(crop) - 1
             if new_f1 > f1 or (remaining_frac > 0.25 and new_area_frac < 0.15):
-                print('%d %s -> %s / %s (%s), %s -> %s / %s (%s), %s -> %s' % (
-                        i, covered_sum, new_sum, total, remaining_frac,
-                        crop_area(crop), crop_area(new_crop), area, new_area_frac,
-                        f1, new_f1))
+                # print('%d %s -> %s / %s (%s), %s -> %s / %s (%s), %s -> %s' % (
+                #         i, covered_sum, new_sum, total, remaining_frac,
+                #         crop_area(crop), crop_area(new_crop), area, new_area_frac,
+                #         f1, new_f1))
+
                 # Save the unioned contour
                 crop = new_crop
                 covered_sum = new_sum
@@ -321,14 +314,14 @@ def process_image(path, out_path, percent_size):
     edges = cv2.Canny(np.asarray(im), 100, 200)
 
     # NOTE : Debug
-    cv2.imwrite("imgcrop/edges.png", edges)
+    cv2.imwrite("imgcrop/01_canny_only.png", edges)
 
     # Dilation with simple kernel to get better contouring
     kernel = np.ones((5,5),np.uint8)
     edges = cv2.dilate(edges, kernel, iterations = 3)
 
     # NOTE : Debug
-    cv2.imwrite("imgcrop/edges_dilated.png", edges)
+    cv2.imwrite("imgcrop/02_canny_dilated.png", edges)
 
     # Contour listing on Canny image
     _, contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -336,7 +329,7 @@ def process_image(path, out_path, percent_size):
     # NOTE : Debug
     egdes_contours = np.asarray(im)
     cv2.drawContours(egdes_contours, contours, -1, (0,0,255), 3)
-    cv2.imwrite("imgcrop/egdes_contours.png", egdes_contours)
+    cv2.imwrite("imgcrop/03_edges_contours.png", egdes_contours)
 
     # Try to detect contours that are a sheet border
     borders = find_border_components(contours, edges, percent_size)
@@ -344,6 +337,7 @@ def process_image(path, out_path, percent_size):
     borders.sort(key=lambda i_x1_y1_x2_y2: (i_x1_y1_x2_y2[3] - i_x1_y1_x2_y2[1]) * (i_x1_y1_x2_y2[4] - i_x1_y1_x2_y2[2]))
 
     border_contour = None
+    degs = None
     # If border sheet are detected
     if len(borders):
         # NOTE : Debug
@@ -355,19 +349,17 @@ def process_image(path, out_path, percent_size):
         # NOTE : Debug
         border_remove = np.asarray(im)
         cv2.drawContours(border_remove, [border_contour], -1, (0,0,255), 3)
-        cv2.imwrite("imgcrop/border_remove.png", border_remove)
+        cv2.imwrite("imgcrop/04_border_detection.png", border_remove)
 
         # Remove everything outside this contour on our image
         edges, degs = remove_border(border_contour, edges, np.asarray(im))
 
-        # NOTE : Debug
-        cv2.imwrite("imgcrop/edges_befor.png", edges)
 
     # Put every pixel in image that are not completely black to pure white
     edges = 255 * (edges > 0).astype(np.uint8)
 
     # NOTE : Debug
-    cv2.imwrite("imgcrop/edges_after.png", edges)
+    cv2.imwrite("imgcrop/06_edges_border_removed.png", edges)
 
     # Remove ~1px borders using a rank filter.
     # maxed_rows = rank_filter(edges, -4, size=(1, 20))
@@ -375,8 +367,8 @@ def process_image(path, out_path, percent_size):
     # debordered = np.minimum(np.minimum(edges, maxed_rows), maxed_cols)
     # edges = debordered
 
-    # NOTE : Debug
-    cv2.imwrite("imgcrop/edges_rank.png", edges)
+    # # NOTE : Debug
+    # cv2.imwrite("imgcrop/edges_rank.png", edges)
 
     # Dilates image to decrease the number of contours
     contours = find_components(edges)
@@ -384,7 +376,7 @@ def process_image(path, out_path, percent_size):
     # NOTE : Debug
     cpy_orig_im = np.asarray(im)
     cv2.drawContours(cpy_orig_im, contours, -1, (0,0,255), 3)
-    cv2.imwrite("imgcrop/orig_im_contour.png", cpy_orig_im)
+    cv2.imwrite("imgcrop/07_contours_border_removed.png", cpy_orig_im)
 
     # Image must have enough contours to contains a text
     if len(contours) == 0:
@@ -432,7 +424,7 @@ def main():
 
     # Process images
     path = args["image"]
-    out_path = 'imgcrop/img_out.png'
+    out_path = 'imgcrop/08_cropped_image.png'
     #out_path = path.replace('.jpg', '.crop.png')
     #out_path = path.replace('.png', '.crop.png')  # .png as input
 
@@ -442,9 +434,11 @@ def main():
         print('%s %s' % (path, e))
 
     # File paths
-    out_path_file_ocr_crop = 'imgcrop/ocr_crop.txt'
-    out_path_file_ocr = 'imgcrop/ocr.txt'
+    out_path_file_ocr_crop = 'imgcrop/ocr_with_crop.txt'
+    out_path_file_ocr = 'imgcrop/ocr_without_crop.txt'
     out_path_file_trad = 'imgcrop/trad.txt'
+
+    print('OCR Initial image in progress')
 
     # Original image OCR
     text = pytesseract.image_to_string(Image.open(path))
@@ -452,11 +446,15 @@ def main():
     file.write(text)
     file.close()
 
+    print('OCR Cropped image in progress')
+
     # Cropped image OCR
     text = pytesseract.image_to_string(Image.open(out_path))
     file = open(out_path_file_ocr_crop, 'w')
     file.write(text)
     file.close()
+
+    print('Translation in progress')
 
     #Translation
     translator = Translator()
