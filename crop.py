@@ -116,7 +116,7 @@ def angle_from_right(deg):
     return min(deg % 90, 90 - (deg % 90))
 
 
-def remove_border(contour, ary, im):
+def remove_border(contour, ary):
     """Remove everything outside a border contour."""
     # Create a new full black image with same dimensions as given image, this image will be used as mask
     c_im = np.zeros(ary.shape)
@@ -124,8 +124,8 @@ def remove_border(contour, ary, im):
     r = cv2.minAreaRect(contour)
     degs = r[2]
     print("degree ", degs)
-    # box = cv2.boxPoints(r)
-    # box = np.int0(box)
+    box = cv2.boxPoints(r)
+    box = np.int0(box)
 
     # Draw a pure white rectangle inside the given contours (considered as sheet)
     cv2.drawContours(c_im, [contour], 0, 255, -1)
@@ -303,7 +303,7 @@ def downscale_image(im, max_dim=2048):
     return scale, new_im
 
 
-def process_image(path, out_path, percent_size):
+def process_image(path, out_path, percent_size, apply_rotation):
     """ Main treatment applied to image """
     # Open specified image
     orig_im = Image.open(path)
@@ -352,7 +352,7 @@ def process_image(path, out_path, percent_size):
         cv2.imwrite("imgcrop/04_border_detection.png", border_remove)
 
         # Remove everything outside this contour on our image
-        edges, degs = remove_border(border_contour, edges, np.asarray(im))
+        edges, degs = remove_border(border_contour, edges)
 
 
     # Put every pixel in image that are not completely black to pure white
@@ -398,7 +398,7 @@ def process_image(path, out_path, percent_size):
 
     # If the sheet detected is rotated we rotate the cropped image too.
     # An image with horizontal text will give better results with OCR, that's why we rotate it correctly.
-    if degs :
+    if degs and apply_rotation:
         img = cv2.imread(out_path)
 
         degs_rotation = angle_from_right(degs)
@@ -419,6 +419,7 @@ def main():
     ap.add_argument("-i", "--image", required=True, type=str, help="path to input image to be OCR'd")
     ap.add_argument("-l", "--language", type=str, default="en", help="destination language used in translation, please use 2 letters format : English -> en")
     ap.add_argument("-s", "--size", type=float, default=0.25, choices=range(0, 1),  help="size of the box containing text in percent of the image, must be a float value between 0 and 1")
+    ap.add_argument("-r", "--no_rotation", action='store_false', default=True,  help="disable special treatment for tilted texts")
 
     args = vars(ap.parse_args())
 
@@ -429,7 +430,7 @@ def main():
     #out_path = path.replace('.png', '.crop.png')  # .png as input
 
     try:
-        process_image(path, out_path, args["size"])
+        process_image(path, out_path, args["size"], args["no_rotation"])
     except Exception as e:
         print('%s %s' % (path, e))
 
