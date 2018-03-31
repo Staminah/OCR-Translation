@@ -25,12 +25,12 @@ import os
 import argparse
 import random
 import sys
-import random
 import math
 import json
 from collections import defaultdict
 import pytesseract
 from googletrans import Translator
+import imutils
 
 import cv2
 from PIL import Image, ImageDraw
@@ -127,9 +127,8 @@ def remove_border(contour, ary, im):
     r = cv2.minAreaRect(contour)
     degs = r[2]
     print("degree ", degs)
-    print("angle min than 10 deg")
-    box = cv2.boxPoints(r)
-    box = np.int0(box)
+    # box = cv2.boxPoints(r)
+    # box = np.int0(box)
 
     # Draw a pure white rectangle inside the given contours (considered as sheet)
     cv2.drawContours(c_im, [contour], 0, 255, -1)
@@ -142,7 +141,7 @@ def remove_border(contour, ary, im):
     cv2.imwrite("imgcrop/remove_border_mask.png", remove_border_mask)
 
     # Return a new image in which each pixel is the minimum between the mask and given image (keeps everything inside the white part of the mask)
-    return np.minimum(c_im, ary)
+    return np.minimum(c_im, ary), degs
 
 
 def find_components(edges, max_components=16):
@@ -304,6 +303,7 @@ def downscale_image(im, max_dim=2048):
         return 1.0, im
     # Get ratio to scale the bigger dimensions to max dim
     scale = 1.0 * max_dim / max(a, b)
+    print('size : ', a , ' / ' , b)
     # Resize image to new scale
     new_im = im.resize((int(a * scale), int(b * scale)), Image.ANTIALIAS)
 
@@ -358,7 +358,7 @@ def process_image(path, out_path, percent_size):
         cv2.imwrite("imgcrop/border_remove.png", border_remove)
 
         # Remove everything outside this contour on our image
-        edges = remove_border(border_contour, edges, np.asarray(im))
+        edges, degs = remove_border(border_contour, edges, np.asarray(im))
 
         # NOTE : Debug
         cv2.imwrite("imgcrop/edges_befor.png", edges)
@@ -404,6 +404,21 @@ def process_image(path, out_path, percent_size):
     text_im.save(out_path)
     print('%s -> %s' % (path, out_path))
 
+    # If the sheet detected is rotated we rotate the cropped image too.
+    # An image with horizontal text will give better results with OCR, that's why we rotate it correctly.
+    if degs :
+        img = cv2.imread(out_path)
+
+        degs_rotation = angle_from_right(degs)
+        # When the sheet is tilted by less than 45°, the sheet is considred in Portrait mode. Otherwise Landscape mode
+        if degs < -45:
+            degs_rotation = -degs_rotation
+
+        rotated = imutils.rotate_bound(img, degs_rotation)
+
+        # Update the cropped image
+        cv2.imwrite(out_path, rotated)
+
 
 def main():
     """Main programm"""
@@ -443,7 +458,7 @@ def main():
     file.write(text)
     file.close()
 
-    # Translation
+    #Translation
     translator = Translator()
     translation = translator.translate(text, dest=args["language"])
     file = open(out_path_file_trad, 'w')
