@@ -1,5 +1,14 @@
+certifi==2018.1.18
+chardet==3.0.4
 Cython==0.27.3
+googletrans==2.2.0
+idna==2.6
 numpy==1.14.1
 opencv-python==3.4.0.12
 Pillow==5.0.0
 pytesseract==0.2.0
+pytz==2018.3
+requests==2.18.4
+rsa==3.4.2
+scipy==1.0.1
+urllib3==1.22

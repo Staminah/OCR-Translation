@@ -1,23 +1,36 @@
 #!/usr/bin/env python
-'''Crop an image to just the portions containing text.
-Usage:
-    ./crop_morphology.py path/to/image.jpg
-This will place the cropped image in path/to/image.crop.png.
+'''Crop an image to just the portions containing text, apply OCR to cropped image and translate the text
+
+usage: crop.py [-h] -i IMAGE [-l LANGUAGE] [-s {0}]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to input image to be OCR'd
+  -l LANGUAGE, --language LANGUAGE
+                        destination language used in translation, please use 2
+                        letters format : English -> en
+  -s {0}, --size {0}    size of the box containing text in percent of the
+                        image, must be a float value between 0 and 1
+
 For details on the methodology, see
 http://www.danvk.org/2015/01/07/finding-blocks-of-text-in-an-image-using-python-opencv-and-numpy.html
 Script created by Dan Vanderkam (https://github.com/danvk)
 Adapted to Python 3 by Lui Pillmann (https://github.com/luipillmann)
-Adapted to work with photographs by Fleury Anthony and Schnaebele Marc, HE-Arc (https://github.com/Staminah/OCR-Translation.git)
+Adapted to work with photographs and added OCR + Translation by Fleury Anthony and Schnaebele Marc, HE-Arc (https://github.com/Staminah/OCR-Translation.git)
 '''
 
 import glob
 import os
+import argparse
 import random
 import sys
 import random
 import math
 import json
 from collections import defaultdict
+import pytesseract
+from googletrans import Translator
 
 import cv2
 from PIL import Image, ImageDraw
@@ -82,7 +95,7 @@ def crop_area(crop):
     return max(0, x2 - x1) * max(0, y2 - y1)
 
 
-def find_border_components(contours, ary):
+def find_border_components(contours, ary, percent_size):
     """ Return a list of contours that have a minimum area compared to full image """
     borders = []
     # Area of initial image
@@ -92,7 +105,7 @@ def find_border_components(contours, ary):
         # Get best fitting rect (horizontal) to enclose current contour
         x,y,w,h = cv2.boundingRect(c)
         # If area of current rect is bigger than a certain limit
-        if w * h > 0.25 * area:
+        if w * h > percent_size * area:
             print("area ", w*h)
             # Add this rect to list
             borders.append((i, x, y, x + w - 1, y + h - 1))
@@ -297,7 +310,7 @@ def downscale_image(im, max_dim=2048):
     return scale, new_im
 
 
-def process_image(path, out_path):
+def process_image(path, out_path, percent_size):
     """ Main treatment applied to image """
     # Open specified image
     orig_im = Image.open(path)
@@ -326,16 +339,16 @@ def process_image(path, out_path):
     cv2.imwrite("imgcrop/egdes_contours.png", egdes_contours)
 
     # Try to detect contours that are a sheet border
-    borders = find_border_components(contours, edges)
+    borders = find_border_components(contours, edges, percent_size)
     # Sort in ascending order by area on selected contours
     borders.sort(key=lambda i_x1_y1_x2_y2: (i_x1_y1_x2_y2[3] - i_x1_y1_x2_y2[1]) * (i_x1_y1_x2_y2[4] - i_x1_y1_x2_y2[2]))
-
-    # NOTE : Debug
-    print("border ", (1+borders[0][3] - borders[0][1]) * (1+borders[0][4] - borders[0][2]))
 
     border_contour = None
     # If border sheet are detected
     if len(borders):
+        # NOTE : Debug
+        print("border ", (1+borders[0][3] - borders[0][1]) * (1+borders[0][4] - borders[0][2]))
+
         # Get the contour with smaller area
         border_contour = contours[borders[0][0]]
 
@@ -394,24 +407,48 @@ def process_image(path, out_path):
 
 def main():
     """Main programm"""
-    # To process all images in a folder
-    if len(sys.argv) == 2 and '*' in sys.argv[1]:
-        files = glob.glob(sys.argv[1])
-        random.shuffle(files)
-    # Listed images
-    else:
-        files = sys.argv[1:]
+    # Construct the argument parse and parse the arguments
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-i", "--image", required=True, type=str, help="path to input image to be OCR'd")
+    ap.add_argument("-l", "--language", type=str, default="en", help="destination language used in translation, please use 2 letters format : English -> en")
+    ap.add_argument("-s", "--size", type=float, default=0.25, choices=range(0, 1),  help="size of the box containing text in percent of the image, must be a float value between 0 and 1")
+
+    args = vars(ap.parse_args())
 
     # Process images
-    for path in files:
-        out_path = 'imgcrop/img_out.png'
-        #out_path = path.replace('.jpg', '.crop.png')
-        #out_path = path.replace('.png', '.crop.png')  # .png as input
-        if os.path.exists(out_path): continue
-        try:
-            process_image(path, out_path)
-        except Exception as e:
-            print('%s %s' % (path, e))
+    path = args["image"]
+    out_path = 'imgcrop/img_out.png'
+    #out_path = path.replace('.jpg', '.crop.png')
+    #out_path = path.replace('.png', '.crop.png')  # .png as input
+
+    try:
+        process_image(path, out_path, args["size"])
+    except Exception as e:
+        print('%s %s' % (path, e))
+
+    # File paths
+    out_path_file_ocr_crop = 'imgcrop/ocr_crop.txt'
+    out_path_file_ocr = 'imgcrop/ocr.txt'
+    out_path_file_trad = 'imgcrop/trad.txt'
+
+    # Original image OCR
+    text = pytesseract.image_to_string(Image.open(path))
+    file = open(out_path_file_ocr, 'w')
+    file.write(text)
+    file.close()
+
+    # Cropped image OCR
+    text = pytesseract.image_to_string(Image.open(out_path))
+    file = open(out_path_file_ocr_crop, 'w')
+    file.write(text)
+    file.close()
+
+    # Translation
+    translator = Translator()
+    translation = translator.translate(text, dest=args["language"])
+    file = open(out_path_file_trad, 'w')
+    file.write(translation.text)
+    file.close()
 
 
 if __name__ == '__main__':
