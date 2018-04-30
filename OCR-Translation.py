@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 '''Crop an image to just the portions containing text, apply OCR to cropped image and translate the text
 
-usage: crop.py [-h] -i IMAGE [-l LANGUAGE] [-s {0}] [-r]
+usage: OCR-Translation.py [-h] -i IMAGE [-l LANGUAGE] [-s {0}] [-r]
 
 required arguments:
 
