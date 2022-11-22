@@ -9,7 +9,7 @@ idna==2.6
 imutils==0.4.6
 numpy==1.14.1
 opencv-python==3.4.0.12
-Pillow==5.0.0
+Pillow==9.3.0
 pytesseract==0.2.0
 requests==2.18.4
 requests-cache==0.4.13
